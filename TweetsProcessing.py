@@ -311,12 +311,12 @@ def get_count_by_time(tweets, field, rate, normalize=False):
 def get_stats(tweets):
     stats = {}
     stats['count'] = len(tweets)
-    stats['avg_retweets'] = get_avg_field_value(tweets, 'retweets')
+    stats['avg_retweets'] = np.mean([x for x in get_list(tweets, 'retweets', False) if x is not None])
     stats['valence'] = get_list(tweets, 'valence', unique=False)
     stats['arousal'] = get_list(tweets, 'arousal', unique=False)
     stats['texts'] = get_list(tweets, 'full_text', unique=False)
-    stats['emotion_count'] = get_sent_count(tweets, 'emotion')
-    stats['sentiment_count'] = get_sent_count(tweets, 'sentiment')
+    stats['emotion'] = get_sent_count(tweets, 'emotion')
+    stats['sentiment'] = get_sent_count(tweets, 'sentiment')
     return stats
 
 
