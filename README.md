@@ -21,9 +21,9 @@ td = TweetsDownloader(language='en', max_results_per_request=500, sleep_time=3)
 td.download(keywords, dates_range, filename)
 ```
 
-Finally, you can merge and reformat the files from different requests:
+Finally, you can merge while reformatting the files from different requests. Note that this phase will create 3 different files, with the tweets, the users's information and the tweets geolocalizations. 
 ```python
 import os
-files = [f for f in os.listdir('./')]
+files = [f for f in os.listdir('./') if f.startswith(filename)]
 td.merge_tweets(files, filename)
 ```
