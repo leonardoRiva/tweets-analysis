@@ -37,6 +37,7 @@ class TweetsDownloader():
         self.sleep_time = sleep_time
 
         self.search_url = "https://api.twitter.com/2/tweets/search/all"
+        self.expansions = ['referenced_tweets.id', 'author_id', 'geo.place_id']
         self.tweet_fields = ['created_at', 'geo', 'public_metrics', 'source', 'entities']
         self.user_fields = ['description', 'location', 'public_metrics', 'verified']
         self.place_fields = ['id', 'full_name', 'place_type', 'country', 'contained_within', 'geo']
@@ -106,7 +107,7 @@ class TweetsDownloader():
         url += "&start_time=" + dates_range[0] + 'T00:00:00.00Z'
         url += "&end_time=" + dates_range[1] + 'T00:00:00.00Z'
         url += "&tweet.fields=" + ','.join(self.tweet_fields)
-        url += "&expansions=author_id,geo.place_id"
+        url += "&expansions=" + ','.join(self.expansions)
         url += "&user.fields=" + ','.join(self.user_fields)
         url += "&place.fields=" + ','.join(self.place_fields)
         url += "&max_results=" + self.max_results_per_request
@@ -188,6 +189,7 @@ class TweetsDownloader():
             filenames: list of the tweets filenames. 
             new_filename: destination of the final dictionary. 
         """
+        # concatenate users
         users = []
         for f in filenames:
             users += self._read_file(f)['includes']['users']
@@ -220,6 +222,9 @@ class TweetsDownloader():
             tmp = self._read_file(f)['includes']
             if 'places' in tmp:
                 places += tmp['places']
+            
+        # set
+        places = list({u['id']:u for u in places}.values())
 
         # flatten coordinates
         for p in places:
