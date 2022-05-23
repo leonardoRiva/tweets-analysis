@@ -34,7 +34,7 @@ def select_fields(tweets, fields, as_list=False, unique=False):
         
         if unique:
             if type(tmp[0]) == list:
-                tmp = list(_flatten(tmp))
+                tmp = list(flatten(tmp))
             tmp = list(set(tmp))
     
     elif unique and type(tmp[0]) == dict and 'id' in tmp[0]:
@@ -44,7 +44,7 @@ def select_fields(tweets, fields, as_list=False, unique=False):
 
 
 
-def _flatten(l):
+def flatten(l):
     for el in l:
         if isinstance(el, Iterable) and not isinstance(el, (str, bytes)):
             yield from _flatten(el)
@@ -129,7 +129,38 @@ def get_tweets_with_location(tweets, users, places):
 
 
 
+#--------------------------------
+# read and write functions
+#--------------------------------
+
+
 def read_file(filename):
+    """
+    Read a json file 
+
+    Args:
+        filename: name of the json file. 
+
+    Returns:
+        A dictionary containing the tweets. 
+    """
     with open(filename, 'r', encoding='utf-8') as f:
         data = json.load(f)
     return data
+
+
+
+def save_file(text, filename, _type='json'):
+    """
+    Write a dictionary into a json file. 
+
+    Args:
+        filename: name of the json file. 
+        _type: format of the destination file, either "txt" or "json"
+    """
+    if _type == 'txt':
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write(text)
+    elif _type == 'json':
+        with open(filename, 'w', encoding='utf-8') as f:
+            json.dump(text, f)

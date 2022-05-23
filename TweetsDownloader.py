@@ -7,6 +7,7 @@ from datetime import datetime
 from rapidfuzz import process, fuzz
 
 from credentials import *
+from TweetsUtils import *
 
 
 
@@ -83,15 +84,15 @@ class TweetsDownloader():
 
             if verbose:
                 print('.', end='')
+
             name = filename + '_' + next_token + '.json'
-            self._save_file(req.text, name, _type='txt')
+            data = req.json()
+            self.save_file(data, name)
             sleep(self.sleep_time)
             
             old_token = next_token
-
-            tweets_meta = self._read_file(name)['meta']
-            if 'next_token' in tweets_meta:
-                next_token = tweets_meta['next_token']
+            if 'next_token' in data['meta']:
+                next_token = data['meta']['next_token']
 
             i += 1
 
@@ -112,7 +113,7 @@ class TweetsDownloader():
         """
         query = '(' + '%20OR%20'.join(['"' + x+'"' if ' ' in x else x for x in keywords]) + ')%20lang%3A' + self.language
 
-        if not original_tweets:
+        if original_tweets:
              query += '%20-is%3Aretweet -is%3Aquote -is%3Areply'
         
         url = self.search_url + "?query=" + query
@@ -132,13 +133,20 @@ class TweetsDownloader():
 
 
 
+    def download_tweet(self, id):
+        url = "https://api.twitter.com/2/tweets/" + str(id)
+        headers = {"Authorization": "Bearer "+BEARER_TOKEN}
+        return requests.get(url, headers=headers)
+
+
+
 
     #--------------------------------
     # merge and reformat functions
     #--------------------------------
 
 
-    def merge_tweets_content(self, filenames, base_filename):
+    def merge_tweets_content(self, filenames, base_filename, fix_retweets_text=False):
         """
         Merge tweets from different requests into a single one, while fixing their format. 
 
@@ -148,11 +156,13 @@ class TweetsDownloader():
         """
         tweets = []
         for f in filenames:
-            tmp = self._read_file(f)['data']
+            tmp = self.read_file(f)['data']
             for tweet in tmp:
                 self._fix_tweet(tweet)
             tweets += tmp
-        self._save_file(tweets, base_filename+'_contents.json', 'json')
+        if fix_retweets_text:
+            tweets = self._replace_retweets_text(tweets)
+        self.save_file(tweets, base_filename+'_contents.json', 'json')
 
 
 
@@ -181,6 +191,48 @@ class TweetsDownloader():
         for k,v in tweet['public_metrics'].items():
             tweet[k] = v
         del tweet['public_metrics']
+
+
+
+    def _replace_retweets_text(self, tweets):
+        # replace truncated retweet text with the full referenced tweet text
+        retweets = [tw for tw in tweets if is_retweet(tw)]
+        referenced_ids = set([tw['referenced_tweets'][0]['id'] for tw in retweets])
+
+        referenced_tweets = filter_list(tweets, 'id', referenced_ids, multiple=True)
+        referenced_tweets = {x['id']:x['text'] for x in referenced_tweets} # reformat as dict
+
+        absent_ids = referenced_ids.difference(set(referenced_tweets.keys()))
+
+        print('total tweets:     ', len(tweets))
+        print('retweets:         ', len(retweets))
+        print('referenced tweets:', len(referenced_ids))
+        print('retweets that have the original in the dataset:       ', len(referenced_tweets))
+        print('retweets that do not have the original in the dataset:', len(absent_ids))
+
+        # search for absent retweets
+        d = {}
+        for _id in absent_ids:
+            req = self.download_tweet(_id)
+            if req.status_code != 200:
+                print('error:', req)
+            else:
+                d[_id] = req.json()['data']['text']
+        
+        # sleep for rate limit
+        sleep(self.sleep_time)
+
+        # merge dictionaries
+        referenced_tweets = {**referenced_tweets, **d}
+
+        # fix retweets text
+        for tw in tweets:
+            if is_retweet(tw):
+                referenced_id = tw['referenced_tweets'][0]['id']
+                if referenced_id in referenced_tweets:
+                    tw['text'] = referenced_tweets[referenced_id]
+
+        return tweets
             
 
             
@@ -196,7 +248,7 @@ class TweetsDownloader():
         # concatenate users
         users = []
         for f in filenames:
-            users += self._read_file(f)['includes']['users']
+            users += self.read_file(f)['includes']['users']
         
         # set
         users = list({u['id']:u for u in users}.values())
@@ -211,7 +263,7 @@ class TweetsDownloader():
         users = self._geolocalize_users_locations(users)
         
         # save new file
-        self._save_file(users, base_filename+'_users.json', 'json')
+        self.save_file(users, base_filename+'_users.json', 'json')
 
 
 
@@ -259,7 +311,7 @@ class TweetsDownloader():
         # concatenate places
         places = []
         for f in filenames:
-            tmp = self._read_file(f)['includes']
+            tmp = self.read_file(f)['includes']
             if 'places' in tmp:
                 places += tmp['places']
         
@@ -275,7 +327,7 @@ class TweetsDownloader():
         places = self._reformat_places(places)
         
         # save new file
-        self._save_file(places, base_filename+'_places.json', _type='json')
+        self.save_file(places, base_filename+'_places.json', _type='json')
 
 
     
@@ -547,40 +599,4 @@ class TweetsDownloader():
 
 
 
-
-    #--------------------------------
-    # read and write functions
-    #--------------------------------
-
-
-    def _read_file(self, filename):
-        """
-        Read a json file 
-
-        Args:
-            filename: name of the json file. 
-
-        Returns:
-            A dictionary containing the tweets. 
-        """
-        with open(filename, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        return data
-
-
-
-    def _save_file(self, text, filename, _type='json'):
-        """
-        Write a dictionary into a json file. 
-
-        Args:
-            filename: name of the json file. 
-            _type: format of the destination file, either "txt" or "json"
-        """
-        if _type == 'txt':
-            with open(filename, 'w', encoding='utf-8') as f:
-                f.write(text)
-        elif _type == 'json':
-            with open(filename, 'w', encoding='utf-8') as f:
-                json.dump(text, f)
 

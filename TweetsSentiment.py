@@ -24,9 +24,11 @@ class TweetsSentiment():
         self.emoji_dict = {k:v['Italian'] for k,v in tmp.to_dict('index').items()}
 
 
+
     def setup_stanza(self, lang='it'):
         stanza.download(lang) # download model
         self.nlp = stanza.Pipeline(lang, processors='lemma,tokenize,ner,mwt,pos') # initialize neural pipeline
+
 
 
     def replace_emojis(self, text):
@@ -101,42 +103,63 @@ class TweetsSentiment():
 
 
 
-    def classify_emotion(self, valence, arousal, v_threshold=0.4, a_threshold=0.4):
+    def classify_emotion(self, valence, arousal, v_threshold=0.3, a_threshold=0.3):
         emotion = 'neutral'
+
+        if valence is not None and arousal is not None:
         
-        if (valence > v_threshold) and (arousal < a_threshold) and (arousal > 0):
-            emotion = 'joy'
+            if (valence > v_threshold) and (arousal < a_threshold) and (arousal > 0):
+                emotion = 'joy'
+                
+            elif (valence > v_threshold) and (arousal > a_threshold):
+                emotion = 'surprise'
+                
+            elif (valence > v_threshold) and (arousal > -a_threshold) and (arousal < 0):
+                emotion = 'anticipation'
             
-        elif (valence > v_threshold) and (arousal > a_threshold):
-            emotion = 'surprise'
+            elif (valence > v_threshold) and (arousal < -a_threshold):
+                emotion = 'trust'
             
-        elif (valence > v_threshold) and (arousal > -a_threshold) and (arousal < 0):
-            emotion = 'anticipation'
-        
-        elif (valence > v_threshold) and (arousal < -a_threshold):
-            emotion = 'trust'
-        
-        elif (valence < -v_threshold) and (arousal < -a_threshold):
-            emotion = 'sadness'
-        
-        elif (valence < -v_threshold) and (arousal > -a_threshold) and (arousal < 0):
-            emotion = 'disgust'
-        
-        elif (valence < -v_threshold) and (arousal < a_threshold) and (arousal > 0):
-            emotion = 'anger'
-        
-        elif (valence < -v_threshold) and (arousal > a_threshold):
-            emotion = 'fear'
+            elif (valence < -v_threshold) and (arousal < -a_threshold):
+                emotion = 'sadness'
+            
+            elif (valence < -v_threshold) and (arousal > -a_threshold) and (arousal < 0):
+                emotion = 'disgust'
+            
+            elif (valence < -v_threshold) and (arousal < a_threshold) and (arousal > 0):
+                emotion = 'anger'
+            
+            elif (valence < -v_threshold) and (arousal > a_threshold):
+                emotion = 'fear'
         
         return emotion
 
 
 
-    def classify_sentiment(self, valence, v_threshold=0.4):
+    def classify_sentiment(self, valence, v_threshold=0.3):
         sentiment = 'neutral'
-        if valence > v_threshold:
-            sentiment = 'positive'
-        elif valence < -v_threshold:
-            sentiment = 'negative'
+        if valence is not None:
+            if valence > v_threshold:
+                sentiment = 'positive'
+            elif valence < -v_threshold:
+                sentiment = 'negative'
         return sentiment
 
+
+
+    def process_tweet(self, text):
+        text_process, entities = self.text_processing(text)
+
+        lemmatized_words = [word['lemma'] for word in text_process]
+        valence, arousal = self.calc_valence_arousal(lemmatized_words)
+        emotion = self.classify_emotion(valence, arousal)
+        sentiment = self.classify_sentiment(valence)
+        
+        return {
+            'lemmatized_text': ' '.join(lemmatized_words), 
+            'entities': entities, 
+            'sentiment': sentiment, 
+            'emotion': emotion, 
+            'valence': valence, 
+            'arousal': arousal
+        }
