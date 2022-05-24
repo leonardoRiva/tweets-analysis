@@ -1,4 +1,3 @@
-
 import json, random, string, requests, re
 import pandas as pd
 import numpy as np
@@ -13,7 +12,7 @@ from TweetsUtils import *
 
 class TweetsDownloader():
     """
-    Tweets download using Full-archive search with Academic Access
+    Tweets download using Full-archive search with Academic Access. 
 
     Rate limits per app:
      - 300 requests / 15 minutes (which means, on average, 1 request / 3 seconds)
@@ -22,7 +21,7 @@ class TweetsDownloader():
     Tweets cap:
      - 10 million per month
 
-    You need to have access to this API by having the keys, stored in the credentials.py file 
+    You need to have access to this API by having the keys, stored in the credentials.py file. 
     """
 
 
@@ -32,7 +31,7 @@ class TweetsDownloader():
 
         Args: 
             language: two-letters country code.
-            max_results_per_request: between 10 and 500
+            max_results_per_request: between 10 and 500. 
             sleep_time: sleep between each request (to avoid exceeding the rate limit). 
         """
         self.language = language
@@ -77,7 +76,7 @@ class TweetsDownloader():
 
         while next_token != old_token and i != max_requests:
             
-            req = self._http_request(keywords, dates_range, next_token, original_tweets)
+            req = self.__http_request(keywords, dates_range, next_token, original_tweets)
             
             if req.status_code != 200:
                 raise Exception('Http request failed. Response code: ' + str(req.status_code))
@@ -87,7 +86,7 @@ class TweetsDownloader():
 
             name = filename + '_' + next_token + '.json'
             data = req.json()
-            self.save_file(data, name)
+            save_file(data, name)
             sleep(self.sleep_time)
             
             old_token = next_token
@@ -98,21 +97,25 @@ class TweetsDownloader():
 
 
 
-    def _http_request(self, keywords, dates_range, next_token, original_tweets):
+    def __http_request(self, keywords, dates_range, next_token, original_tweets):
         """
         Perform an http request to the Twitter API 2.0. 
 
         Args:
             keywords: list of keywords which have to be present in the tweets (retrieved if one keyword is inside the text).
-            dates_range: tuple with start and end date; format: ("yyyy-mm-dd", "yyyy-mm-dd"). 
+            dates_range: tuple with start and end date, with format: ("yyyy-mm-dd", "yyyy-mm-dd"). 
             next_token: token for consecutive requests; can be found inside the previous tweet payload. 
             original_tweets: if True, retweets, quotes and replies will be filtered out. 
 
         Returns:
             The http request object. 
         """
-        query = '(' + '%20OR%20'.join(['"' + x+'"' if ' ' in x else x for x in keywords]) + ')%20lang%3A' + self.language
-
+        if type(keywords) == list:
+            query = '(' + '%20OR%20'.join(['"' + x+'"' if ' ' in x else x for x in keywords]) + ')'
+        else:
+            query = keywords
+        query += '%20lang%3A' + self.language
+        
         if original_tweets:
              query += '%20-is%3Aretweet -is%3Aquote -is%3Areply'
         
@@ -133,8 +136,17 @@ class TweetsDownloader():
 
 
 
-    def download_tweet(self, id):
-        url = "https://api.twitter.com/2/tweets/" + str(id)
+    def download_tweet(self, tweet_id):
+        """
+        Download a single tweet given an id. 
+
+        Args:
+            tweet_id: id of the tweet. 
+
+        Returns:
+            The tweet as a dictionary. 
+        """
+        url = "https://api.twitter.com/2/tweets/" + str(tweet_id)
         headers = {"Authorization": "Bearer "+BEARER_TOKEN}
         return requests.get(url, headers=headers)
 
@@ -156,17 +168,17 @@ class TweetsDownloader():
         """
         tweets = []
         for f in filenames:
-            tmp = self.read_file(f)['data']
+            tmp = read_file(f)['data']
             for tweet in tmp:
-                self._fix_tweet(tweet)
+                self.__fix_tweet(tweet)
             tweets += tmp
         if fix_retweets_text:
-            tweets = self._replace_retweets_text(tweets)
-        self.save_file(tweets, base_filename+'_contents.json', 'json')
+            tweets = self.__replace_retweets_text(tweets)
+        save_file(tweets, base_filename+'_contents.json', 'json')
 
 
 
-    def _fix_tweet(self, tweet):
+    def __fix_tweet(self, tweet):
         """
         Operates on a tweet by flattening some fields, fixing the datetime format and the retweet field. 
 
@@ -194,8 +206,16 @@ class TweetsDownloader():
 
 
 
-    def _replace_retweets_text(self, tweets):
-        # replace truncated retweet text with the full referenced tweet text
+    def __replace_retweets_text(self, tweets):
+        """
+        Replaces the truncated text of the retweets with the full text of the reference tweet. If the referenced tweet is not in the downloaded tweets, it retrieves it through the API. 
+
+        Args:
+            tweets: list of tweets. 
+
+        Returns:
+            The updated list of tweets. 
+        """
         retweets = [tw for tw in tweets if is_retweet(tw)]
         referenced_ids = set([tw['referenced_tweets'][0]['id'] for tw in retweets])
 
@@ -203,12 +223,6 @@ class TweetsDownloader():
         referenced_tweets = {x['id']:x['text'] for x in referenced_tweets} # reformat as dict
 
         absent_ids = referenced_ids.difference(set(referenced_tweets.keys()))
-
-        print('total tweets:     ', len(tweets))
-        print('retweets:         ', len(retweets))
-        print('referenced tweets:', len(referenced_ids))
-        print('retweets that have the original in the dataset:       ', len(referenced_tweets))
-        print('retweets that do not have the original in the dataset:', len(absent_ids))
 
         # search for absent retweets
         d = {}
@@ -236,7 +250,7 @@ class TweetsDownloader():
             
 
             
-    def merge_users_info(self, filenames, base_filename):
+    def merge_users_info(self, filenames, base_filename, geolocalize_locations=False):
         """
         Merge users information from different requests into a single one, while fixing their format, 
         meaning it flattens some fields, takes unique users, and geolocalizes their location. 
@@ -248,7 +262,7 @@ class TweetsDownloader():
         # concatenate users
         users = []
         for f in filenames:
-            users += self.read_file(f)['includes']['users']
+            users += read_file(f)['includes']['users']
         
         # set
         users = list({u['id']:u for u in users}.values())
@@ -260,14 +274,15 @@ class TweetsDownloader():
             del user['public_metrics']
 
         # geolocalization
-        users = self._geolocalize_users_locations(users)
+        if geolocalize_locations:
+            users = self.__geolocalize_users_locations(users)
         
         # save new file
-        self.save_file(users, base_filename+'_users.json', 'json')
+        save_file(users, base_filename+'_users.json', 'json')
 
 
 
-    def _geolocalize_users_locations(self, users):
+    def __geolocalize_users_locations(self, users):
         """
         Geolocalize the users location from the users list. 
 
@@ -277,19 +292,19 @@ class TweetsDownloader():
         Returns:
             The same users list, with the location field geolocalized, if the place exists in Italy. 
         """
-        df_italy_places = self._get_italy_places()
-        comuni_words = self._get_italy_places_words(df_italy_places)
-        regioni = self._get_italy_regions(df_italy_places)
+        df_italy_places = self.__get_italy_places()
+        comuni_words = self.__get_italy_places_words(df_italy_places)
+        regioni = self.__get_italy_regions(df_italy_places)
 
         data = {}
         for user in users:
             if 'location' in user:
                 loc = user['location']
-                loc = self._normalize_location(loc)
+                loc = self.__normalize_location(loc)
                 
                 if loc is not None:
                     
-                    if (loc not in data) and (self._is_location_useful(loc, comuni_words)):
+                    if (loc not in data) and (self.__is_location_useful(loc, comuni_words)):
                         geo = self.geolocalize(loc, df_italy_places, regioni)
                         if geo is not None:
                             data[loc] = {'lat': geo[0], 'lon': geo[1], 'name': loc, 'region': geo[2]}
@@ -311,7 +326,7 @@ class TweetsDownloader():
         # concatenate places
         places = []
         for f in filenames:
-            tmp = self.read_file(f)['includes']
+            tmp = read_file(f)['includes']
             if 'places' in tmp:
                 places += tmp['places']
         
@@ -324,14 +339,14 @@ class TweetsDownloader():
             del p['geo']
 
         # reformat
-        places = self._reformat_places(places)
+        places = self.__reformat_places(places)
         
         # save new file
-        self.save_file(places, base_filename+'_places.json', _type='json')
+        save_file(places, base_filename+'_places.json', _type='json')
 
 
     
-    def _reformat_places(self, places):
+    def __reformat_places(self, places):
         """
         Calculate coordinates from the place bounding box, filter out non-italian cities, separates name from region. 
 
@@ -341,8 +356,8 @@ class TweetsDownloader():
         Returns:
             The formatted places list. 
         """
-        df_italy_places = self._get_italy_places()
-        regions = self._get_italy_regions(df_italy_places)
+        df_italy_places = self.__get_italy_places()
+        regions = self.__get_italy_regions(df_italy_places)
 
         places = [p for p in places if p['country'] == 'Italia' and p['place_type'] in ['city']]
 
@@ -353,11 +368,11 @@ class TweetsDownloader():
             try:
                 full_name = p['full_name'].split(', ')
                 p['name'] = full_name[0]
-                p['region'] = self._fix_region(full_name[1])
+                p['region'] = self.__fix_region(full_name[1])
             except:
                 geo = self.geolocalize(p['full_name'], df_italy_places, regions)
                 p['name'] = p['full_name']
-                p['region'] = self._fix_region(geo[2])
+                p['region'] = self.__fix_region(geo[2])
             
             for field in ['bounding_box', 'country', 'place_type', 'full_name']:
                 del p[field]
@@ -384,16 +399,16 @@ class TweetsDownloader():
         Returns:
             A tuple containing the coordinates and the region of the location. 
         """
-        match = self._find_similar_match(location, italy_places)
+        match = self.__find_similar_match(location, italy_places)
         if match is None:
-            match = self._coords_http_request(location, regions)
+            match = self.__coords_http_request(location, regions)
         if match is not None:
-            match[2] = self._fix_region(match[2])
+            match[2] = self.__fix_region(match[2])
         return match
 
 
 
-    def _get_italy_places(self):
+    def __get_italy_places(self):
         """
         Reads and return a file containing every municipality in Italy, with their province, province code, region, latitude and longitude. 
 
@@ -411,7 +426,7 @@ class TweetsDownloader():
 
 
 
-    def _get_italy_regions(self, italy_places, alternative_names=True):
+    def __get_italy_regions(self, italy_places, alternative_names=True):
         """
         Returns a set of italian regions. 
 
@@ -431,7 +446,7 @@ class TweetsDownloader():
 
 
 
-    def _get_italy_places_words(self, italy_places):
+    def __get_italy_places_words(self, italy_places):
         """
         Returns a set of words that appears in municipalities, province_codes, provinces and regions. 
 
@@ -450,7 +465,7 @@ class TweetsDownloader():
 
 
 
-    def _fix_region(self, region):
+    def __fix_region(self, region):
         """
         Fix the region format, by lowercasing it and replacing some alternative names. 
 
@@ -468,7 +483,7 @@ class TweetsDownloader():
 
 
 
-    def _normalize_location(self, location):
+    def __normalize_location(self, location):
         """
         Normalize a location, by lowercasing it, replacing english names, deleting non-letters characters. 
 
@@ -509,7 +524,7 @@ class TweetsDownloader():
 
 
 
-    def _is_location_useful(self, location, places_words):
+    def __is_location_useful(self, location, places_words):
         """
         Determines if a location is useful, by checking if at least one word appear in a municipality, province_code, province or region. 
 
@@ -525,7 +540,7 @@ class TweetsDownloader():
 
 
 
-    def _find_similar_match(self, location, italy_places):
+    def __find_similar_match(self, location, italy_places):
         """
         Attempts to find a match between a location and the list of places in Italy. 
 
@@ -569,7 +584,7 @@ class TweetsDownloader():
 
 
 
-    def _coords_http_request(self, location, regions):
+    def __coords_http_request(self, location, regions):
         """
         Performs a http request to Nominatim (OpenStreetMap open-source geocoder). 
 
@@ -596,7 +611,4 @@ class TweetsDownloader():
         except Exception as e: 
             print(e)
             return None
-
-
-
 
