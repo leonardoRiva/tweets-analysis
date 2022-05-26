@@ -1,9 +1,10 @@
-import json, random, string, requests, re
+import json, random, string, requests, re, os
 import pandas as pd
 import numpy as np
 from time import sleep
 from datetime import datetime
 from rapidfuzz import process, fuzz
+from pathlib import Path
 
 from credentials import *
 from TweetsUtils import *
@@ -25,7 +26,7 @@ class TweetsDownloader():
     """
 
 
-    def __init__(self, language, max_results_per_request, sleep_time):
+    def __init__(self, language, max_results_per_request, sleep_time, filename, path):
         """
         Class initialization. The url for the http request and the fields to retrieve are already initialized. 
 
@@ -33,10 +34,18 @@ class TweetsDownloader():
             language: two-letters country code.
             max_results_per_request: between 10 and 500. 
             sleep_time: sleep between each request (to avoid exceeding the rate limit). 
+            filename: used to name folders and tweets files. 
+            path: where the folder for the tweets will be created. 
         """
         self.language = language
         self.max_results_per_request = str(max_results_per_request)
         self.sleep_time = sleep_time
+        self.filename = filename
+        self.path = path
+        self.base_folder = path + filename + '_extended/' 
+
+        # create folder if it doesn't exist
+        Path(self.base_folder).mkdir(parents=True, exist_ok=True)
 
         self.search_url = "https://api.twitter.com/2/tweets/search/all"
         self.expansions = ['referenced_tweets.id', 'author_id', 'geo.place_id']
@@ -52,14 +61,13 @@ class TweetsDownloader():
     #--------------------------------
 
 
-    def download(self, keywords, dates_range, filename, next_token=None, max_requests=-1, original_tweets=False, verbose=True):
+    def download(self, keywords, dates_range, next_token=None, max_requests=-1, original_tweets=False, verbose=True):
         """
         Downloads and saves tweets, based on keywords, between two dates. It retrieves them by performing multiple http get requests to the Twitter API 2.0.
 
         Args: 
             keywords: list of keywords which have to be present in the tweets (retrieved if one keyword is inside the text).
             dates_range: tuple with start and end date; format: ("yyyy-mm-dd", "yyyy-mm-dd")
-            filename: destination base-filename. 
             next_token: token for consecutive requests; can be found inside the previous tweet payload. If None, it starts from the first tweet. 
             max_requests: how many requests will be performed at max; if -1, the requests will continue till every tweet in the dates range is downloaded. 
             original_tweets: if True, retweets, quotes and replies will be filtered out. 
@@ -84,8 +92,8 @@ class TweetsDownloader():
             if verbose:
                 print('.', end='')
 
-            name = filename + '_' + next_token + '.json'
             data = req.json()
+            name = self.base_folder + self.filename + '_' + next_token + '.json'
             save_file(data, name)
             sleep(self.sleep_time)
             
@@ -117,7 +125,7 @@ class TweetsDownloader():
         query += '%20lang%3A' + self.language
         
         if original_tweets:
-             query += '%20-is%3Aretweet -is%3Aquote -is%3Areply'
+             query += '%20-is%3Aretweet%20-is%3Aquote%20-is%3Areply'
         
         url = self.search_url + "?query=" + query
         if next_token[:10] != '0000000000':
@@ -136,7 +144,7 @@ class TweetsDownloader():
 
 
 
-    def download_tweet(self, tweet_id):
+    def __single_tweet_request(self, tweet_id):
         """
         Download a single tweet given an id. 
 
@@ -158,23 +166,29 @@ class TweetsDownloader():
     #--------------------------------
 
 
-    def merge_tweets_content(self, filenames, base_filename, fix_retweets_text=False):
+    def merge_tweets_content(self, destination_path=None, fix_retweets_text=False):
         """
         Merge tweets from different requests into a single one, while fixing their format. 
 
         Args:
-            filenames: list of the tweets filenames. 
-            base_filename: base filename of the files.  
+            destination_path: new destination folder for the final files. If None, it will use the same folder as before. 
+            fix_retweets_text: if True, replace the truncated text with the full referenced tweet text. 
         """
+        filenames = [self.base_folder + f for f in os.listdir(self.base_folder) if ('contents' not in f) and ('users' not in f) and ('places' not in f)]
         tweets = []
+
         for f in filenames:
             tmp = read_file(f)['data']
             for tweet in tmp:
                 self.__fix_tweet(tweet)
             tweets += tmp
+
         if fix_retweets_text:
             tweets = self.__replace_retweets_text(tweets)
-        save_file(tweets, base_filename+'_contents.json', 'json')
+
+        if destination_path is None:
+            destination_path = self.base_folder
+        save_file(tweets, destination_path+self.filename+'_contents.json')
 
 
 
@@ -227,7 +241,7 @@ class TweetsDownloader():
         # search for absent retweets
         d = {}
         for _id in absent_ids:
-            req = self.download_tweet(_id)
+            req = self.__single_tweet_request(_id)
             if req.status_code != 200:
                 print('error:', req)
             else:
@@ -250,15 +264,17 @@ class TweetsDownloader():
             
 
             
-    def merge_users_info(self, filenames, base_filename, geolocalize_locations=False):
+    def merge_users_info(self, destination_path=None, geolocalize_locations=False):
         """
         Merge users information from different requests into a single one, while fixing their format, 
         meaning it flattens some fields, takes unique users, and geolocalizes their location. 
 
         Args:
-            filenames: list of the tweets filenames. 
-            base_filename: base filename of the files. 
+            destination_path: new destination folder for the final files. If None, it will use the same folder as before. 
+            geolocalize_locations: If True, geolocalize users location through Nominatim requests. 
         """
+        filenames = [self.base_folder + f for f in os.listdir(self.base_folder) if ('contents' not in f) and ('users' not in f) and ('places' not in f)]
+        
         # concatenate users
         users = []
         for f in filenames:
@@ -278,7 +294,9 @@ class TweetsDownloader():
             users = self.__geolocalize_users_locations(users)
         
         # save new file
-        save_file(users, base_filename+'_users.json', 'json')
+        if destination_path is None:
+            destination_path = self.base_folder
+        save_file(users, destination_path+self.filename+'_users.json')
 
 
 
@@ -315,14 +333,15 @@ class TweetsDownloader():
 
 
 
-    def merge_places(self, filenames, base_filename):
+    def merge_places(self, destination_path=None):
         """
         Merge tweets places from different requests into a single one, while fixing their format. 
 
         Args:
-            filenames: list of the tweets filenames. 
-            base_filename: base filename of the files. 
+            destination_path: new destination folder for the final files. If None, it will use the same folder as before. 
         """
+        filenames = [self.base_folder + f for f in os.listdir(self.base_folder) if ('contents' not in f) and ('users' not in f) and ('places' not in f)]
+
         # concatenate places
         places = []
         for f in filenames:
@@ -342,7 +361,9 @@ class TweetsDownloader():
         places = self.__reformat_places(places)
         
         # save new file
-        save_file(places, base_filename+'_places.json', _type='json')
+        if destination_path is None:
+            destination_path = self.base_folder
+        save_file(places, destination_path+self.filename+'_places.json')
 
 
     
