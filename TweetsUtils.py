@@ -1,4 +1,3 @@
-
 import pandas as pd
 import numpy as np
 import json
@@ -11,6 +10,10 @@ def filter_list(tweets, field, value, value2=None, multiple=False):
         return list(filter(lambda tw: (tw[field] >= value and tw[field] < value2), tweets))
     elif multiple:
         return list(filter(lambda tw: tw[field] in value, tweets))
+    elif field == 'hashtags':
+        return [tw.copy() for tw in tweets if 'hashtags' in tw and value.lower() in [x.lower() for x in tw['hashtags']]]
+    elif field == 'entities':
+        return [tw.copy() for tw in tweets if 'entities' in tw and value.lower() in [x['text'].lower() for x in tw['entities']]]
     else:
         return list(filter(lambda tw: tw[field] == value, tweets))
 
@@ -74,17 +77,30 @@ def is_retweet(tweet):
 
 
 
-def filter_keywords(tweets, word, keywords):
-    tmp_kw = keywords.copy()
-    tmp_kw.remove(word)
-    tmp_kw = set(tmp_kw)
-    
-    res = []
-    for tw in tweets:
-        s = set(tw['text'].lower().split())
-        if word in s and len(s.intersection(tmp_kw)) >= 1:
-            res.append(tw)
-    return res
+# counts how many keywords are present in a text
+def count_keywords(text, keywords):
+    return np.sum([k in text for k in keywords])
+
+
+
+# returns tweets with the keyword k, in combination with other (n-1) keywords
+def keyword_in_combination(tweets, k, keywords, n):
+    tmp = [tw for tw in tweets if k in tw['text'].lower()]
+    return [tw for tw in tmp if count_keywords(tw['text'], keywords) >= n]
+
+
+
+# get list of mentions (with @) in a text
+def get_mentions(text):
+    return [x.replace('.','').replace(',','').replace(';','').replace('?','').replace('!','') 
+            for x in text.split() if x.startswith('@')]
+
+
+
+# check if a text contains a mention
+def has_mentions(text, all_mentions):
+    mentions = set(get_mentions(text))
+    return len(mentions.intersection(all_mentions)) > 0
 
 
 

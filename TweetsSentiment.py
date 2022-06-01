@@ -2,6 +2,7 @@ import stanza
 import pandas as pd
 import numpy as np
 import re
+from nltk.corpus import stopwords
 
 from TweetsUtils import *
 
@@ -30,6 +31,9 @@ class TweetsSentiment():
         tmp.set_index('Twtr', inplace=True)
         self.emoji_dict = {k:v['Italian'] for k,v in tmp.to_dict('index').items()}
 
+        # stopwords
+        self.stopwords_list = stopwords.words('italian')
+
 
 
     def setup_stanza(self, language='it'):
@@ -56,7 +60,7 @@ class TweetsSentiment():
         """
         text_process, entities = self.__text_processing(text)
 
-        lemmatized_words = [word['lemma'] for word in text_process]
+        lemmatized_words = [word['lemma'] for word in text_process if word['lemma'] not in self.stopwords_list]
         valence, arousal = self.__calc_valence_arousal(lemmatized_words)
         emotion = self.classify_emotion(valence, arousal)
         sentiment = self.classify_sentiment(valence)
