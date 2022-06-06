@@ -58,12 +58,10 @@ class TweetsSentiment():
         Returns:
             A dictionary with the result of the processing. 
         """
-        text_process, entities = self.__text_processing(text)
-
-        lemmatized_words = [word['lemma'] for word in text_process if word['lemma'] not in self.stopwords_list]
+        lemmatized_words, entities = self.__text_processing(text)
         valence, arousal = self.__calc_valence_arousal(lemmatized_words)
-        emotion = self.classify_emotion(valence, arousal)
-        sentiment = self.classify_sentiment(valence)
+        emotion = self.classify_emotion(valence, arousal, 0.35, 0.35)
+        sentiment = self.classify_sentiment(valence, 0.35)
         
         return {
             'lemmatized_text': ' '.join(lemmatized_words), 
@@ -76,7 +74,7 @@ class TweetsSentiment():
 
 
 
-    def __replace_emojis(self, text):
+    def __separate_emojis(self, text):
         """
         Replaces every emoji in the text with its meaning, if the emojij is in the emojis file. 
 
@@ -87,9 +85,12 @@ class TweetsSentiment():
             The text with replaces emojis. 
         """
         emojis_in_text = set(list(text)).intersection(set(self.emoji_dict.keys()))
+        emojis = []
         for emoji in emojis_in_text:
-            text = text.replace(emoji, ' '+self.emoji_dict[emoji]+' ')
-        return ' '.join(text.split())
+            text = text.replace(emoji, ' ')
+            emojis.append(self.emoji_dict[emoji])
+        text = ' '.join(text.split()).strip()
+        return text, emojis
 
 
 
@@ -125,13 +126,15 @@ class TweetsSentiment():
         regex = r'(?i)\b((?:https?://|www\d{0,3}[.]|[a-z0-9.\-]+[.][a-z]{2,4}/)(?:[^\s()<>]+|\(([^\s()<>]+|(\([^\s()<>]+\)))*\))+(?:\(([^\s()<>]+|(\([^\s()<>]+\)))*\)|[^\s`!()\[\]{};:\'".,<>?«»“”‘’]))'
         text = re.sub(regex, '', text).strip()
         
-        # replace emojis
-        text = self.__replace_emojis(text)
+        # separate emojis
+        text, emojis_text = self.__separate_emojis(text)
         
         # remove html chars
         for sequence in ['&gt', '&lt', '&amp', '...', '…']:
             text = text.replace(sequence, ' ')
+        text = text.replace('\n', '. ')
         text = text.encode("utf-8", "ignore").decode()
+        text = ' '.join(text.split())
         
         # tokenization, lemmatization, ner
         processed = self.nlp(text)
@@ -148,8 +151,18 @@ class TweetsSentiment():
         tags_to_delete = ['PUNCT', 'NUM', 'ADP', 'AUX', 'DET', 'CCONJ', 'SCONJ', 'PRON', 'X']
         text_process = [word for word in text_process 
                         if (word['upos'] not in tags_to_delete) and (not word['text'].startswith('@'))]
+
+        # get lemma
+        entities_tmp = ' '.join([e['text'].lower() for e in entities])
+        lemmatized_words = [word['lemma'].lower() for word in text_process]
+
+        # remove stopwords and entities
+        lemmatized_words = [word for word in lemmatized_words if (word not in self.stopwords_list) and (word not in entities_tmp)]
+
+        # add emojis
+        lemmatized_words += emojis_text
         
-        return text_process, entities
+        return lemmatized_words, entities
 
 
 
@@ -174,7 +187,7 @@ class TweetsSentiment():
 
 
 
-    def classify_emotion(self, valence, arousal, v_threshold=0.3, a_threshold=0.3):
+    def classify_emotion(self, valence, arousal, v_threshold=0.5, a_threshold=0.5):
         """
         Classify the emotion on the text, based on its valence and arousal (from Plutchik's wheel of emotions). 
 
@@ -219,7 +232,7 @@ class TweetsSentiment():
 
 
 
-    def classify_sentiment(self, valence, v_threshold=0.3):
+    def classify_sentiment(self, valence, v_threshold=0.5):
         """
         Classify the sentiment on the text, based on its valence. 
 
