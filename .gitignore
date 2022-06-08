@@ -1,4 +1,12 @@
-credentials.py
-tmp/
 __pycache__/
 .ipynb_checkpoints/
+
+tmp/
+tweets/
+fonts/
+
+credentials.py
+colab_sentiment.ipynb
+analysis_flu.ipynb
+analysis_mdw.ipynb
+download_data.ipynb
