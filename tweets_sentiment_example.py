@@ -1,5 +1,4 @@
 # imports
-from datetime import datetime
 from TweetsUtils import *
 from TweetsSentiment import TweetsSentiment
 
