@@ -1,7 +1,6 @@
 
 # tweets-analysis
-
-Reading, cleaning, sentiment-emotion analysis, Named Entity Recognition, ...
+Python pipeline for analyzing tweets. Tasks: download, text preprocessing, geolocalization, sentiment-emotion analysis, Named Entity Recognition. 
 
 
 ### Tweets download
@@ -12,5 +11,9 @@ You will need to install the ``rapidfuzz`` library.
 Then, you can see the usage in ``tweets_download_example.py``. 
 
 
-### Flu analysis 
-``analysis_flu.ipynb`` deals with analyzing the downloaded data...
+### Sentiment analysis 
+``TweetsSentiment.py`` deals with performing a sentiment and emotion analysis, after the download. 
+
+You will need to install the ``stanza`` library. 
+
+Then, you can see the usage in ``tweets_sentiment_example.py``. 
