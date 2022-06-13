@@ -4,11 +4,9 @@ Python pipeline for analyzing tweets. Tasks: download, text preprocessing, geolo
 
 
 ### Tweets download
-``TweetsDownloader.py`` deals with downloading tweets. You need a ``credentials.py`` file, in the same format as ``credentials_example.py`` and in the same folder, with your Twitter API 2.0 keys with Academic Access. 
+``TweetsDownloader.py`` deals with downloading tweets. You need a ``credentials.py`` file, in the same format as ``credentials_example.py`` (in the examples folder), with your Twitter API 2.0 keys with Academic Access. 
 
 You will need to install the ``rapidfuzz`` library. 
-
-Then, you can see the usage in ``tweets_download_example.py``. 
 
 
 ### Sentiment analysis 
@@ -16,4 +14,6 @@ Then, you can see the usage in ``tweets_download_example.py``.
 
 You will need to install the ``stanza`` library. 
 
-Then, you can see the usage in ``tweets_sentiment_example.py``. 
+
+### Examples
+You can see the usage of each functionality in the ``examples`` folder. Keep in mind that, in order to use those file, you need to move them in the main folder, with the other files. 
