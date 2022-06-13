@@ -14,37 +14,42 @@ class TweetsSentiment():
     """
 
 
-    def __init__(self):
+    def __init__(self, language):
         """
         Class initialization. It initializes the dictonaries for retrieving words and emojis valence/arousal. 
+
+        Args: 
+            language: lowercase name of the language (either english or italian).
         """
+        self.lang = language[:2]
+
         # lexicon
+        column = 'Italian-it'
+        if self.lang == 'en':
+            column = 'Word'
         tmp = pd.read_csv('files/Italian-it-NRC-VAD-Lexicon_scaled (version 1).csv', sep=';', encoding='latin-1')
-        tmp['Italian-it'] = tmp['Italian-it'].str.lower()
-        del tmp['Word']
-        tmp = tmp.groupby('Italian-it').mean()
+        tmp[column] = tmp[column].str.lower()
+        tmp = tmp[[column, 'Valence', 'Arousal']]
+        tmp = tmp.groupby(column).mean()
         self.lex_dict = tmp.to_dict('index')
 
         # emojis 
         tmp = pd.read_excel('files/codici_emoji.xlsx', sheet_name='Emoji')
-        tmp = tmp[['Twtr', 'Italian']].dropna()
+        tmp = tmp[['Twtr', language.title()]].dropna()
         tmp.set_index('Twtr', inplace=True)
-        self.emoji_dict = {k:v['Italian'] for k,v in tmp.to_dict('index').items()}
+        self.emoji_dict = {k:v[language.title()] for k,v in tmp.to_dict('index').items()}
 
         # stopwords
-        self.stopwords_list = stopwords.words('italian')
+        self.stopwords_list = stopwords.words(language)
 
 
 
-    def setup_stanza(self, language='it'):
+    def setup_stanza(self):
         """
         Download Stanza model for the selected language and initialize the pipeline for lemmatization, tokenization, NER, MWT and POS tagging. 
-
-        Args: 
-            lang: two-letters country code.
         """
-        stanza.download(language)
-        self.nlp = stanza.Pipeline(language, processors='lemma,tokenize,ner,mwt,pos')
+        stanza.download(self.lang)
+        self.nlp = stanza.Pipeline(self.lang, processors='lemma,tokenize,ner,mwt,pos')
 
 
 
@@ -130,7 +135,7 @@ class TweetsSentiment():
         text, emojis_text = self.__separate_emojis(text)
         
         # remove html chars
-        for sequence in ['&gt', '&lt', '&amp', '...', '…']:
+        for sequence in ['&gt', '&lt', '&amp', ';quot', '...', '…']:
             text = text.replace(sequence, ' ')
         text = text.replace('\n', '. ')
         text = text.encode("utf-8", "ignore").decode()
