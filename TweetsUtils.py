@@ -3,6 +3,14 @@ import numpy as np
 import json
 
 
+
+def filter_year(tweets, year):
+    if type(tweets[0]['datetime']) == str:
+        return [tw for tw in tweets if tw['datetime'].startswith(str(year))]
+    else:
+        return [tw for tw in tweets if tw['datetime'].year == year]
+
+
 # returns the tweets that match the value in the field
 # if value2 is not None, then it's a range between the two values
 def filter_list(tweets, field, value, value2=None, multiple=False):
