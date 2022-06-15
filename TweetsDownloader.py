@@ -264,14 +264,15 @@ class TweetsDownloader():
             
 
             
-    def merge_users_info(self, destination_path=None, geolocalize_locations=False):
+    def merge_users_info(self, destination_path=None, geolocalize_locations=False, italy_subset=False):
         """
         Merge users information from different requests into a single one, while fixing their format, 
         meaning it flattens some fields, takes unique users, and geolocalizes their location. 
 
         Args:
             destination_path: new destination folder for the final files. If None, it will use the same folder as before. 
-            geolocalize_locations: If True, geolocalize users location through Nominatim requests. 
+            geolocalize_locations: if True, geolocalize users location through Nominatim requests. 
+            italy_subset: if True and geolocalize_locations is True, it geolocalizes only italian places. 
         """
         filenames = [self.base_folder + f for f in os.listdir(self.base_folder) if ('contents' not in f) and ('users' not in f) and ('places' not in f)]
         
@@ -291,7 +292,7 @@ class TweetsDownloader():
 
         # geolocalization
         if geolocalize_locations:
-            users = self.__geolocalize_users_locations(users)
+            users = self.__geolocalize_users_locations(users, italy_subset)
         
         # save new file
         if destination_path is None:
@@ -300,15 +301,16 @@ class TweetsDownloader():
 
 
 
-    def __geolocalize_users_locations(self, users):
+    def __geolocalize_users_locations(self, users, italy_subset=False):
         """
         Geolocalize the users location from the users list. 
 
         Args:
             users: list of users, where each user is a dictionary. 
+            italy_subset: if True, it geolocalizes only italian places. 
 
         Returns:
-            The same users list, with the location field geolocalized, if the place exists in Italy. 
+            The same users list, with the location field geolocalized. 
         """
         df_italy_places = self.__get_italy_places()
         comuni_words = self.__get_italy_places_words(df_italy_places)
@@ -321,11 +323,15 @@ class TweetsDownloader():
                 loc = self.__normalize_location(loc)
                 
                 if loc is not None:
-                    
-                    if (loc not in data) and (self.__is_location_useful(loc, comuni_words)):
-                        geo = self.geolocalize(loc, df_italy_places, regioni)
+                    if (loc not in data) and (not italy_subset or self.__is_location_useful(loc, comuni_words)):
+                        geo = self.geolocalize(loc, df_italy_places, regioni, italy_subset)
                         if geo is not None:
-                            data[loc] = {'lat': geo[0], 'lon': geo[1], 'name': loc, 'region': geo[2]}
+                            data[loc] = {'lat': geo[0], 'lon': geo[1], 'name': loc}
+                            if italy_subset:
+                                data[loc]['region'] = geo[2]
+                            else:
+                                data[loc]['country'] = geo[2]
+
 
                     if loc in data:
                         user['location'] = data[loc]
@@ -333,12 +339,13 @@ class TweetsDownloader():
 
 
 
-    def merge_places(self, destination_path=None):
+    def merge_places(self, destination_path=None, italy_subset=False):
         """
         Merge tweets places from different requests into a single one, while fixing their format. 
 
         Args:
             destination_path: new destination folder for the final files. If None, it will use the same folder as before. 
+            italy_subset: if True, it saves only italian places. 
         """
         filenames = [self.base_folder + f for f in os.listdir(self.base_folder) if ('contents' not in f) and ('users' not in f) and ('places' not in f)]
 
@@ -358,7 +365,7 @@ class TweetsDownloader():
             del p['geo']
 
         # reformat
-        places = self.__reformat_places(places)
+        places = self.__reformat_places(places, italy_subset)
         
         # save new file
         if destination_path is None:
@@ -367,12 +374,13 @@ class TweetsDownloader():
 
 
     
-    def __reformat_places(self, places):
+    def __reformat_places(self, places, italy_subset=False):
         """
         Calculate coordinates from the place bounding box, filter out non-italian cities, separates name from region. 
 
         Args:
             places: list of places, where each place is a dictionary. 
+            italy_subset: if True, it reformats names and regions of italian places. 
 
         Returns:
             The formatted places list. 
@@ -380,23 +388,26 @@ class TweetsDownloader():
         df_italy_places = self.__get_italy_places()
         regions = self.__get_italy_regions(df_italy_places)
 
-        places = [p for p in places if p['country'] == 'Italia' and p['place_type'] in ['city']]
+        places = [p for p in places if (p['place_type'] == 'city') and (not italy_subset or p['country'] == 'Italia')]
 
         for p in places:
             p['lat'] = np.mean(p['bounding_box'][1::2])
             p['lon'] = np.mean(p['bounding_box'][::2])
 
-            try:
-                full_name = p['full_name'].split(', ')
-                p['name'] = full_name[0]
-                p['region'] = self.__fix_region(full_name[1])
-            except:
-                geo = self.geolocalize(p['full_name'], df_italy_places, regions)
-                p['name'] = p['full_name']
-                p['region'] = self.__fix_region(geo[2])
+            if italy_subset:
+                try:
+                    full_name = p['full_name'].split(', ')
+                    p['name'] = full_name[0]
+                    p['region'] = self.__fix_region(full_name[1])
+                except:
+                    geo = self.geolocalize(p['full_name'], df_italy_places, regions, True)
+                    p['name'] = p['full_name']
+                    p['region'] = self.__fix_region(geo[2])
             
-            for field in ['bounding_box', 'country', 'place_type', 'full_name']:
+            for field in ['bounding_box', 'place_type', 'full_name']:
                 del p[field]
+            if italy_subset:
+                del p['country']
             
         return places
 
@@ -408,7 +419,7 @@ class TweetsDownloader():
     #--------------------------------
 
 
-    def geolocalize(self, location, italy_places, regions):
+    def geolocalize(self, location, italy_places, regions, italy_subset=False):
         """
         Geolocalize a location. If the location is not inside the list of places in Italy, then it performs a http request to Nominatim to geolocalize the address. 
 
@@ -416,14 +427,17 @@ class TweetsDownloader():
             location: address to be geolocalized. 
             italy_places: Pandas DataFrame containing every municipality in Italy, with their respective coordinates, province and region. 
             regions: set of regions. 
+            italy_subset: if True, it checks for similar matches in saved places and fix the region if it makes a request. 
 
         Returns:
             A tuple containing the coordinates and the region of the location. 
         """
-        match = self.__find_similar_match(location, italy_places)
+        match = None
+        if italy_subset:
+            match = self.__find_similar_match(location, italy_places)
         if match is None:
-            match = self.__coords_http_request(location, regions)
-        if match is not None:
+            match = self.__coords_http_request(location, regions, italy_subset)
+        if italy_subset and match is not None:
             match[2] = self.__fix_region(match[2])
         return match
 
@@ -605,18 +619,19 @@ class TweetsDownloader():
 
 
 
-    def __coords_http_request(self, location, regions):
+    def __coords_http_request(self, location, regions, italy_subset=False):
         """
         Performs a http request to Nominatim (OpenStreetMap open-source geocoder). 
 
         Args:
             location: a string. 
             regions: set of italian regions. 
+            italy_subset: if True, it geolocalizes only italian places. 
 
         Returns:
-            Coordinates and region of the location, if the request doesn't fail and the location is in Italy, None otherwise. 
+            Coordinates and region of the location, if the request doesn't. 
         """
-        url = f'https://nominatim.openstreetmap.org/search?q={location}&format=json'
+        url = f'https://nominatim.openstreetmap.org/search?q={location}&format=json&accept-language=en'
         try:
             result = requests.get(url=url)
             result_json = result.json()
@@ -624,7 +639,10 @@ class TweetsDownloader():
                 lat = float(result_json[0]['lat'])
                 lon = float(result_json[0]['lon'])
                 name = result_json[0]['display_name']
-                if 'Italia' in name:
+                country = result_json[0]['display_name'].split(',')[-1].strip()
+                if not italy_subset:
+                    return [lat, lon, country]
+                elif 'Italia' in name:
                     region = [reg for reg in regions if reg in name.lower()]
                     if len(region) > 0:
                         return [lat, lon, region[0]]

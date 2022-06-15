@@ -125,7 +125,7 @@ def get_tweets_with_location(tweets, users, places):
     df_geo = df_geo[df_geo['geo'].isin(place_ids)].reset_index(drop=True)
     rows = []
     for g in df_geo['geo']:
-        rows += filter_list(places, 'id', g)
+        rows.append(filter_list(places, 'id', g)[0])
     tmp = pd.DataFrame(rows).reset_index(drop=True)
     df_geo = pd.concat([df_geo, tmp], axis=1)
     for field in ['geo', 'id']:
