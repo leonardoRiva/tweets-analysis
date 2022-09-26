@@ -67,7 +67,7 @@ class TweetsDownloader():
 
         Args: 
             keywords: list of keywords which have to be present in the tweets (retrieved if one keyword is inside the text).
-            dates_range: tuple with start and end date; format: ("yyyy-mm-dd", "yyyy-mm-dd")
+            dates_range: tuple with start and end date; format: ("yyyy-mm-dd", )
             next_token: token for consecutive requests; can be found inside the previous tweet payload. If None, it starts from the first tweet. 
             max_requests: how many requests will be performed at max; if -1, the requests will continue till every tweet in the dates range is downloaded. 
             original_tweets: if True, retweets, quotes and replies will be filtered out. 
@@ -87,7 +87,7 @@ class TweetsDownloader():
             req = self.__http_request(keywords, dates_range, next_token, original_tweets)
             
             if req.status_code != 200:
-                raise Exception('Http request failed. Response code: ' + str(req.status_code))
+                raise Exception('Http request failed. Response code: ' + str(req.json()))
 
             if verbose:
                 print('.', end='')
@@ -110,7 +110,7 @@ class TweetsDownloader():
         Perform an http request to the Twitter API 2.0. 
 
         Args:
-            keywords: list of keywords which have to be present in the tweets (retrieved if one keyword is inside the text).
+            keywords: list of keywords which have to be present in the tweets (retrieved if one keyword is inside the text) or a query string. 
             dates_range: tuple with start and end date, with format: ("yyyy-mm-dd", "yyyy-mm-dd"). 
             next_token: token for consecutive requests; can be found inside the previous tweet payload. 
             original_tweets: if True, retweets, quotes and replies will be filtered out. 
@@ -188,6 +188,10 @@ class TweetsDownloader():
 
         if destination_path is None:
             destination_path = self.base_folder
+
+        # create folder if it doesn't exist
+        Path(destination_path).mkdir(parents=True, exist_ok=True)
+
         save_file(tweets, destination_path+self.filename+'_contents.json')
 
 
@@ -297,6 +301,10 @@ class TweetsDownloader():
         # save new file
         if destination_path is None:
             destination_path = self.base_folder
+
+        # create folder if it doesn't exist
+        Path(destination_path).mkdir(parents=True, exist_ok=True)
+
         save_file(users, destination_path+self.filename+'_users.json')
 
 
@@ -370,6 +378,10 @@ class TweetsDownloader():
         # save new file
         if destination_path is None:
             destination_path = self.base_folder
+
+        # create folder if it doesn't exist
+        Path(destination_path).mkdir(parents=True, exist_ok=True)
+        
         save_file(places, destination_path+self.filename+'_places.json')
 
 
@@ -518,7 +530,7 @@ class TweetsDownloader():
 
 
 
-    def __normalize_location(self, location):
+    def normalize_location(self, location):
         """
         Normalize a location, by lowercasing it, replacing english names, deleting non-letters characters. 
 

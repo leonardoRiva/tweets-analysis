@@ -85,6 +85,12 @@ def is_retweet(tweet):
 
 
 
+# check if a tweet is original
+def is_original(tweet):
+    return 'referenced_tweets' not in tweet
+
+
+
 # counts how many keywords are present in a text
 def count_keywords(text, keywords):
     return np.sum([k in text for k in keywords])
@@ -112,6 +118,15 @@ def has_mentions(text, all_mentions):
 
 
 
+# check if a text contains at least one word
+def has_words(text, words):
+    for w in words:
+        if w in text.lower():
+            return True
+    return False
+
+
+
 # as a dataframe
 def get_tweets_with_location(tweets, users, places):
     # get data
@@ -119,8 +134,9 @@ def get_tweets_with_location(tweets, users, places):
     df = pd.DataFrame(tmp)
     
     # geolocalization
-    df_geo = df.copy().dropna()
-    df_geo['geo'] = df_geo['geo'].apply(lambda x: x['place_id'])
+    df_geo = df.copy()
+    df_geo['geo'] = df_geo['geo'].apply(lambda x: x['place_id'] if type(x)==dict and 'place_id' in x else None)
+    df_geo = df_geo.dropna()
     place_ids = select_fields(places, ['id'], as_list=True, unique=True)
     df_geo = df_geo[df_geo['geo'].isin(place_ids)].reset_index(drop=True)
     rows = []
