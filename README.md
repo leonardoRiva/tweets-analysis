@@ -1,6 +1,6 @@
 
 # tweets-analysis
-Python pipeline for analyzing tweets. Tasks: download, text preprocessing, geolocalization, sentiment-emotion analysis, Named Entity Recognition. 
+Python pipeline for analyzing tweets. Tasks: download, text preprocessing, geolocalization, Sentiment Analysis, Named Entity Recognition. 
 
 
 ### Tweets download
