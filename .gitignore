@@ -6,8 +6,3 @@ tweets/
 fonts/
 
 credentials.py
-colab_sentiment.ipynb
-analysis_flu.ipynb
-analysis_mdw.ipynb
-download_data.ipynb
-TweetsSentiment.py
